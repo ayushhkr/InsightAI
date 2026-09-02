@@ -1,0 +1,14 @@
+date,product,category,region,quantity,price,discount
+2023-01-01,Laptop,Electronics,North,2,1200.0,0.05
+2023-01-02,Mouse,Accessories,South,5,25.0,0.0
+2023-01-02,Keyboard,Accessories,West,3,45.0,0.0
+2023-01-03,Monitor,Electronics,East,1,200.0,0.1
+2023-01-04,Laptop,Electronics,South,1,1200.0,0.1
+2023-01-05,Chair,Furniture,North,4,150.0,0.0
+2023-01-06,Desk,Furniture,West,2,300.0,0.0
+2023-01-07,Mouse,Accessories,East,10,25.0,0.05
+2023-01-08,Webcam,Electronics,North,2,80.0,0.0
+2023-01-09,Headset,Electronics,South,3,60.0,0.0
+2023-01-10,Laptop,Electronics,West,1,1200.0,0.1
+2023-01-10,Mouse,Accessories,East,4,25.0,0.0
+2023-01-11,Chair,Furniture,North,1,150.0,0.0
