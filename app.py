@@ -5,7 +5,9 @@ Main Streamlit UI application for InsightAI.
 import streamlit as st
 import pandas as pd
 from src.profiler import profile_dataset
-from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram
+from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram, create_chart
+from src.llm import generate_analysis_plan, generate_insight
+from src.analyzer import execute_analysis_plan
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
 
@@ -96,6 +98,55 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
                     st.error(f"Could not generate {chart_type} chart. Error: {e}")
+
+            st.divider()
+            
+            # --- AI Analysis ---
+            st.header("Ask your data")
+            user_question = st.text_input("Ask a question about your dataset", placeholder="e.g. Which region generated the most revenue?")
+            
+            if st.button("Analyze"):
+                if user_question:
+                    with st.spinner("Analyzing with AI..."):
+                        try:
+                            # 1. Get Plan
+                            metadata = {
+                                "columns": profile["columns"],
+                                "data_types": profile["data_types"],
+                                "numerical_cols": profile["numerical_cols"],
+                                "categorical_cols": profile["categorical_cols"],
+                                "datetime_cols": profile["datetime_cols"]
+                            }
+                            plan = generate_analysis_plan(user_question, metadata)
+                            
+                            # Execute Plan
+                            res_df, exe_meta = execute_analysis_plan(df, plan)
+                            
+                            # Display Result DF
+                            st.write(f"### {plan.get('title', 'Analysis Results')}")
+                            st.dataframe(res_df, use_container_width=True)
+                            
+                            if "warning" in exe_meta:
+                                st.warning(exe_meta["warning"])
+                                
+                            # Visualizer
+                            fig = create_chart(res_df, plan)
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                            # AI Explanation
+                            small_res = res_df.head(20).to_csv(index=False)
+                            insight = generate_insight(user_question, small_res)
+                            
+                            st.success(f"**AI Insight:**\n\n{insight}")
+                            
+                            with st.expander("How I analyzed this"):
+                                st.json(plan)
+                                
+                        except ValueError as e:
+                            st.error(f"Analysis could not be completed: {e}")
+                        except Exception as e:
+                            st.error(f"An unexpected error occurred during AI analysis: {e}")
                     
         except pd.errors.EmptyDataError:
             st.error("Uploaded file is empty or invalid.")
