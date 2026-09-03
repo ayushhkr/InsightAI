@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from src.profiler import profile_dataset
 from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram, create_chart
-from src.llm import generate_analysis_plan, generate_insight
+from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output
 from src.analyzer import execute_analysis_plan
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
@@ -122,7 +122,7 @@ def main():
                 with st.chat_message("user"):
                     st.write(turn["question"])
                 with st.chat_message("assistant"):
-                    st.write(turn["insight"])
+                    st.markdown(clean_markdown_output(turn["insight"]))
                     
                     if turn.get('res_df') is not None and not turn['res_df'].empty:
                         with st.expander("Analysis Results & Details"):
@@ -166,8 +166,9 @@ def main():
                                 
                             small_res = res_df.head(20).to_csv(index=False)
                             insight = generate_insight(user_question, small_res, history=recent_history)
+                            cleaned_insight = clean_markdown_output(insight)
                             
-                            st.write(insight)
+                            st.markdown(cleaned_insight)
                             
                             with st.expander("Analysis Results & Details", expanded=True):
                                 st.write(f"### {plan.get('title', 'Analysis Results')}")
@@ -183,7 +184,7 @@ def main():
                                 "question": user_question,
                                 "plan": plan,
                                 "res_df": res_df,
-                                "insight": insight
+                                "insight": cleaned_insight
                             })
                             
                             # Trim to 10
