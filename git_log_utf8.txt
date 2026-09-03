@@ -1,0 +1,10 @@
+﻿df962fb fixing api calls
+18e16e6 feat: implement data analysis engine
+ac3f99d fixed metrics
+f9563ce feat: implement local NLP router to optimize deterministic queries and reduce LLM API calls
+d3afe13 fixing llm responses and text
+2b90c4e fix in llm response
+2bce06e feat: implement Gemini API retry logic
+2603670 text format fix
+35b3f11 feat: add markdown cleaning utility
+48b11db feat: implement LLM-driven data analysis pipeline with Gemini integration
