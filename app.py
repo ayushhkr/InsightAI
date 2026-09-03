@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from src.profiler import profile_dataset
 from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram, create_chart
-from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output
+from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output, GeminiBusyError
 from src.analyzer import execute_analysis_plan
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
@@ -191,11 +191,14 @@ def main():
                             if len(st.session_state.chat_history) > 10:
                                 st.session_state.chat_history = st.session_state.chat_history[-10:]
                                 
+                        except GeminiBusyError:
+                            st.error("Gemini is temporarily busy. Please try again in a moment.")
+                            st.stop()
                         except ValueError as e:
                             st.error(f"Analysis could not be completed: {e}")
                             st.stop()
                         except Exception as e:
-                            st.error(f"An unexpected error occurred during AI analysis: {e}")
+                            st.error("An unexpected error occurred during AI analysis. Please try again.")
                             st.stop()
                             
         except pd.errors.EmptyDataError:

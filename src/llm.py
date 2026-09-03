@@ -5,11 +5,16 @@ Handles interactions with the Gemini API (via google-genai); converts natural la
 import os
 import json
 import re
+import time
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
+
+class GeminiBusyError(Exception):
+    """Raised when the Gemini API is temporarily unavailable or experiencing high demand after retries."""
+    pass
 
 def clean_markdown_output(text: str) -> str:
     """
@@ -44,6 +49,55 @@ def get_client():
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not set in environment variables.")
     return genai.Client(api_key=api_key)
+
+def call_gemini_with_retry(client, model_name: str, contents: str, config: types.GenerateContentConfig, max_retries: int = 3):
+    """
+    Calls Gemini API with automatic exponential backoff retries for 503/UNAVAILABLE temporary errors.
+    Backoff delays: 2s -> 4s -> 8s.
+    Does NOT retry 400, 401, 403, 404 client/authentication errors.
+    """
+    delays = [2, 4, 8]
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config
+            )
+        except Exception as e:
+            err_str = str(e).upper()
+            status_code = getattr(e, 'code', None) or getattr(e, 'status_code', None)
+            
+            # Check if non-retryable error (400, 401, 403, 404)
+            is_non_retryable = False
+            if status_code in (400, 401, 403, 404):
+                is_non_retryable = True
+            elif any(code_str in err_str for code_str in ["400", "401", "403", "404", "INVALID_ARGUMENT", "PERMISSION_DENIED", "NOT_FOUND"]):
+                is_non_retryable = True
+                
+            if is_non_retryable:
+                raise e
+                
+            # Check if retryable 503 or transient server busy error
+            is_transient_error = (
+                status_code == 503 or
+                "503" in err_str or
+                "UNAVAILABLE" in err_str or
+                "HIGH DEMAND" in err_str or
+                "TEMPORARILY" in err_str or
+                "RESOURCE_EXHAUSTED" in err_str or
+                "OVERLOADED" in err_str
+            )
+            
+            if is_transient_error and attempt < max_retries:
+                delay = delays[attempt] if attempt < len(delays) else 8
+                time.sleep(delay)
+                continue
+            elif is_transient_error:
+                raise GeminiBusyError("Gemini is temporarily busy. Please try again in a moment.") from e
+            else:
+                raise e
 
 def generate_analysis_plan(question: str, dataframe_metadata: dict, history: list = None) -> dict:
     client = get_client()
@@ -93,8 +147,9 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
     If the question cannot be answered, return {{"operation": "describe", "title": "Cannot Answer", "chart": "none", "group_column": null, "metric": null, "aggregation": null, "filter": null, "sort": null, "top_n": null}}.
     """
     
-    response = client.models.generate_content(
-        model=model_name,
+    response = call_gemini_with_retry(
+        client=client,
+        model_name=model_name,
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -152,8 +207,9 @@ def generate_insight(question: str, analysis_result: str, history: list = None) 
     - Make sure every heading (**Key Findings:** and **Recommendations:**) is on its own separate line.
     """
     
-    response = client.models.generate_content(
-        model=model_name,
+    response = call_gemini_with_retry(
+        client=client,
+        model_name=model_name,
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.2
