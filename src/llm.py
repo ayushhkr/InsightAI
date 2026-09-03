@@ -13,36 +13,29 @@ load_dotenv()
 
 def clean_markdown_output(text: str) -> str:
     """
-    Sanitizes and cleans AI markdown output to fix common formatting glitches:
-    - Removes duplicated/malformed asterisks like '* *' or '* *in'
-    - Ensures proper space separation around bold markers '**'
-    - Fixes attached words like '**intotalrevenue**' -> '**in total revenue**'
+    Sanitizes and cleans AI markdown output:
+    - Ensures section headers (**Key Findings:**, **Recommendations:**) are on their own lines.
+    - Fixes attached section headers like '...94.**Recommendations:**1.' -> '...94.\n\n**Recommendations:**\n1.'
+    - Cleans up weird multi-space artifacts.
     """
     if not text:
         return ""
     
-    cleaned = text
+    cleaned = text.strip()
     
-    # Replace multiple spaces/asterisks artifacts like '* *' with '**'
-    cleaned = re.sub(r'\*\s+\*', '**', cleaned)
+    # Ensure **Key Findings:** starts on a new line
+    cleaned = re.sub(r'([^\n])\s*\*\*Key\s*Findings\s*:\*\*', r'\1\n\n**Key Findings:**', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\*\*Key\s*Findings\s*:\*\*\s*', r'**Key Findings:**\n', cleaned, flags=re.IGNORECASE)
     
-    # Fix concatenated bold markers where space is missing before text or after text
-    # e.g., "* *intotalrevenue" -> "**in total revenue"
-    cleaned = re.sub(r'\*\*([a-zA-Z0-9_]+)', r'** \1', cleaned)
-    cleaned = re.sub(r'([a-zA-Z0-9_]+)\*\*', r'\1 **', cleaned)
+    # Ensure **Recommendations:** starts on a new line
+    cleaned = re.sub(r'([^\n])\s*\*\*Recommendations\s*:\*\*', r'\1\n\n**Recommendations:**', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\*\*Recommendations\s*:\*\*\s*', r'**Recommendations:**\n', cleaned, flags=re.IGNORECASE)
     
-    # Separate camelCase or glued words inside bold tags if needed
-    # Insert spaces between lowercase followed by uppercase or glued words like 'intotalrevenue'
-    # Specifically fix common pattern: 'in' 'total' 'revenue'
-    cleaned = re.sub(r'\b(in|total|revenue|by|with|for|and|of|the|is|are|was|were|most|least|highest|lowest)([a-zA-Z]+)\b', r'\1 \2', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\b(in|total|revenue|by|with|for|and|of|the|is|are|was|were|most|least|highest|lowest)([a-zA-Z]+)\b', r'\1 \2', cleaned, flags=re.IGNORECASE)
+    # Fix numbered lists touching **Recommendations:** (e.g. **Recommendations:**1. -> **Recommendations:**\n1. )
+    cleaned = re.sub(r'(\*\*Recommendations:\*\*)\s*([0-9]+\.)', r'\1\n\2', cleaned)
     
-    # Clean up double spaces caused by regex replacements
-    cleaned = re.sub(r' +', ' ', cleaned)
-    cleaned = re.sub(r'\s*\*\*\s*', '**', cleaned)  # normalize bold tag attachments cleanly
-    
-    # Ensure markdown headers/lists have clean spacing
-    cleaned = re.sub(r'(\n-[^\n]+)\n([^\n-])', r'\1\n\n\2', cleaned)
+    # Normalize clean line breaks (max 2 consecutive newlines)
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     
     return cleaned.strip()
 
@@ -93,13 +86,7 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
     
     Rules:
     - Use the conversation history to understand context if the query is a follow-up (e.g. "What about quantity?").
-    - For questions asking "How can I increase sales in [X]?" or strategy/business questions about a specific region, category, or segment:
-      * Choose `"operation": "groupby"`
-      * `"group_column"`: choose product, category, or appropriate column to break down performance (e.g., product or category)
-      * `"metric"`: "revenue" (or "quantity" / "price")
-      * `"aggregation"`: "sum"
-      * `"sort"`: "descending"
-    - If the user implies looking at the highest or lowest values, use `sort` and `top_n` respectively.
+    - For strategy or business questions (e.g. "How can I increase sales in [X]?"), use `"operation": "groupby"`, set `"group_column"` to a categorical column like region, category, or product, `"metric"` to "revenue" (or quantity), `"aggregation"` to "sum", and `"sort"` to "descending".
     - Select a sensible `chart` type (e.g. bar for categorical comparison, line for trend/time-based, scatter for 2 numerical, histogram for distribution).
     - If a column like 'revenue' is asked for but does not exist in columns, specify `"metric": "revenue"` and the analyzer will attempt to calculate it automatically if price and quantity exist.
     
@@ -142,27 +129,27 @@ def generate_insight(question: str, analysis_result: str, history: list = None) 
     Analysis Result (CSV format representation of dataset result):
     {analysis_result}
     
-    CRITICAL FORMATTING & CONTENT REQUIREMENTS:
-    1. Base all observations and recommendations ONLY on the actual numbers present in the Analysis Result. Do NOT invent metrics, sales figures, or facts not present in the data.
-    2. Format the response strictly using clean markdown as follows:
-    
-    [Short 1-sentence conclusion directly answering the question]
+    CRITICAL FORMATTING INSTRUCTIONS:
+    1. Write standard, plain English sentences. ALWAYS put normal spaces between words. NEVER concatenate words together (e.g. NEVER write "youshouldanalyze" or "in crease").
+    2. Format numbers normally with standard currency or comma notation (e.g. "$5,643,356.55" or "5,643,356 units"). NEVER format numbers as "5, 643, 356.55" with spaces after commas.
+    3. Structure your response EXACTLY as follows:
+
+    [Short 1-sentence overall conclusion]
 
     **Key Findings:**
-    - [Finding 1 + exact metric/number]
-    - [Finding 2 + exact metric/number]
-    - [Finding 3 + exact metric/number]
+    - [Key finding 1 with exact number/metric]
+    - [Key finding 2 with exact number/metric]
+    - [Key finding 3 with exact number/metric]
 
     **Recommendations:**
-    1. [Actionable recommendation clearly based on the observed data]
-    2. [Actionable recommendation clearly based on the observed data]
-    3. [Actionable recommendation clearly based on the observed data]
+    1. [Actionable recommendation 1]
+    2. [Actionable recommendation 2]
+    3. [Actionable recommendation 3]
 
     Rules:
-    - Keep formatting crisp. Do not double asterisks or combine words into things like "* *intotalrevenue" or "**97million**". Write normal numbers with proper currency/units (e.g. "$1,200.00" or "10 units").
-    - For non-recommendation questions (e.g., simple facts like "Which region generated the least revenue?"), you may omit the Recommendations block and keep the Key Findings concise.
-    - Clearly distinguish observed facts from recommendations.
-    - Stay concise and professional.
+    - Base all numbers ONLY on the Analysis Result provided above. Do NOT invent numbers or facts.
+    - For simple questions (e.g. "Which region generated the least revenue?"), you can omit the Recommendations block and keep the response concise.
+    - Make sure every heading (**Key Findings:** and **Recommendations:**) is on its own separate line.
     """
     
     response = client.models.generate_content(
