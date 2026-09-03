@@ -8,6 +8,7 @@ from src.profiler import profile_dataset
 from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram, create_chart
 from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output, GeminiBusyError
 from src.analyzer import execute_analysis_plan
+from src.anomaly import detect_anomalies
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
 
@@ -104,6 +105,30 @@ def main():
                         st.plotly_chart(fig, use_container_width=True)
                     except Exception as e:
                         st.error(f"Could not generate {chart_type} chart. Error: {e}")
+
+            st.divider()
+            
+            # --- Anomaly Detection ---
+            st.header("Anomaly Detection")
+            if st.button("Detect Anomalies"):
+                with st.spinner("Scanning dataset for anomalies..."):
+                    anomaly_results = detect_anomalies(df)
+                    
+                    total = anomaly_results.get("total_anomalies", 0)
+                    if total == 0:
+                        st.success("No numerical outliers were detected in this dataset.")
+                    else:
+                        st.warning(f"Found {total} anomalous rows.")
+                        
+                        cols = anomaly_results.get("columns", {})
+                        for col_name, stats in cols.items():
+                            if stats["anomaly_count"] > 0:
+                                st.write(f"- **{col_name}**: {stats['anomaly_count']} anomalies "
+                                         f"(IQR Bounds: [{stats['lower_bound']}, {stats['upper_bound']}])")
+                                         
+                        st.write("### Anomalous Rows")
+                        anomaly_idx = anomaly_results.get("anomalous_indices", [])
+                        st.dataframe(df.loc[anomaly_idx], use_container_width=True)
 
             st.divider()
             
