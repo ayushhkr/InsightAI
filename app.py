@@ -11,21 +11,28 @@ from src.analyzer import execute_analysis_plan
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
 
+def initialize_chat_history():
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
 def main():
     st.title("InsightAI")
     st.subheader("AI-Powered Data Analyst")
+    
+    initialize_chat_history()
     
     # Upload section
     uploaded_file = st.file_uploader("Upload a CSV dataset", type=["csv"])
     
     if uploaded_file is not None:
         try:
-            # We only load it once to save performance/session state
+            # Rehydrate context on new upload or load
             if "df" not in st.session_state or st.session_state.get("uploaded_filename") != uploaded_file.name:
                 df = pd.read_csv(uploaded_file)
                 st.session_state["df"] = df
                 st.session_state["uploaded_filename"] = uploaded_file.name
                 st.session_state["profile"] = profile_dataset(df)
+                st.session_state.chat_history = []
                 
             df = st.session_state["df"]
             profile = st.session_state["profile"]
@@ -41,75 +48,103 @@ def main():
             col3.metric("Missing Values", sum(profile["missing_counts"].values()))
             col4.metric("Duplicate Rows", profile["duplicate_rows"])
             
-            st.divider()
-            
-            # --- Section 1: Dataset Preview ---
-            st.header("1. Dataset Preview")
-            st.dataframe(df.head(10), use_container_width=True)
-            
-            # --- Section 2: Column Information ---
-            st.header("2. Column Information")
-            col_info_df = pd.DataFrame({
-                "Data Type": profile["data_types"],
-                "Missing Values": profile["missing_counts"]
-            })
-            st.dataframe(col_info_df, use_container_width=True)
-            
-            # --- Section 3: Summary Statistics ---
-            st.header("3. Summary Statistics")
-            if profile["descriptive_statistics"]:
-                stats_df = pd.DataFrame(profile["descriptive_statistics"])
-                st.dataframe(stats_df, use_container_width=True)
-            else:
-                st.info("No numerical columns available for summary statistics.")
+            with st.expander("Explore Dashboard", expanded=False):
+                # --- Section 1: Dataset Preview ---
+                st.header("1. Dataset Preview")
+                st.dataframe(df.head(10), use_container_width=True)
                 
-            # --- Section 4: Data Quality ---
-            st.header("4. Data Quality")
-            st.write(f"**Total duplicate rows:** {profile['duplicate_rows']}")
-            st.write(f"**Total missing values across all columns:** {sum(profile['missing_counts'].values())}")
-            
-            st.divider()
-            
-            # --- Explore Data ---
-            st.header("Explore Data")
-            if profile["num_cols"] > 0:
-                explore_col1, explore_col2, explore_col3 = st.columns(3)
-                with explore_col1:
-                    chart_type = st.selectbox("Select Chart Type", ["Bar", "Line", "Scatter", "Histogram"])
-                with explore_col2:
-                    x_col = st.selectbox("Select X-axis", profile["columns"])
-                with explore_col3:
-                    if chart_type != "Histogram":
-                        y_col = st.selectbox("Select Y-axis", profile["columns"], index=min(1, len(profile["columns"])-1))
-                    else:
-                        y_col = None
-                        
-                # Rendering chart
-                try:
-                    if chart_type == "Bar":
-                        fig = create_bar_chart(df, x_col, y_col)
-                    elif chart_type == "Line":
-                        fig = create_line_chart(df, x_col, y_col)
-                    elif chart_type == "Scatter":
-                        fig = create_scatter_chart(df, x_col, y_col)
-                    elif chart_type == "Histogram":
-                        fig = create_histogram(df, x_col)
-                        
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Could not generate {chart_type} chart. Error: {e}")
+                # --- Section 2: Column Information ---
+                st.header("2. Column Information")
+                col_info_df = pd.DataFrame({
+                    "Data Type": profile["data_types"],
+                    "Missing Values": profile["missing_counts"]
+                })
+                st.dataframe(col_info_df, use_container_width=True)
+                
+                # --- Section 3: Summary Statistics ---
+                st.header("3. Summary Statistics")
+                if profile["descriptive_statistics"]:
+                    stats_df = pd.DataFrame(profile["descriptive_statistics"])
+                    st.dataframe(stats_df, use_container_width=True)
+                else:
+                    st.info("No numerical columns available for summary statistics.")
+                    
+                # --- Section 4: Data Quality ---
+                st.header("4. Data Quality")
+                st.write(f"**Total duplicate rows:** {profile['duplicate_rows']}")
+                st.write(f"**Total missing values across all columns:** {sum(profile['missing_counts'].values())}")
+                
+                st.divider()
+                
+                # --- Explore Data ---
+                st.header("Explore Data")
+                if profile["num_cols"] > 0:
+                    explore_col1, explore_col2, explore_col3 = st.columns(3)
+                    with explore_col1:
+                        chart_type = st.selectbox("Select Chart Type", ["Bar", "Line", "Scatter", "Histogram"])
+                    with explore_col2:
+                        x_col = st.selectbox("Select X-axis", profile["columns"])
+                    with explore_col3:
+                        if chart_type != "Histogram":
+                            y_col = st.selectbox("Select Y-axis", profile["columns"], index=min(1, len(profile["columns"])-1))
+                        else:
+                            y_col = None
+                            
+                    # Rendering chart
+                    try:
+                        if chart_type == "Bar":
+                            fig = create_bar_chart(df, x_col, y_col)
+                        elif chart_type == "Line":
+                            fig = create_line_chart(df, x_col, y_col)
+                        elif chart_type == "Scatter":
+                            fig = create_scatter_chart(df, x_col, y_col)
+                        elif chart_type == "Histogram":
+                            fig = create_histogram(df, x_col)
+                            
+                        st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Could not generate {chart_type} chart. Error: {e}")
 
             st.divider()
             
-            # --- AI Analysis ---
-            st.header("Ask your data")
-            user_question = st.text_input("Ask a question about your dataset", placeholder="e.g. Which region generated the most revenue?")
+            # --- AI Analysis (Conversational) ---
+            colA, colB = st.columns([0.8, 0.2])
+            with colA:
+                st.header("Ask your data")
+            with colB:
+                if len(st.session_state.chat_history) > 0:
+                    if st.button("Clear conversation"):
+                        st.session_state.chat_history = []
+                        st.rerun()
+
+            # Render Past History
+            for turn in st.session_state.chat_history:
+                with st.chat_message("user"):
+                    st.write(turn["question"])
+                with st.chat_message("assistant"):
+                    st.write(turn["insight"])
+                    
+                    if turn.get('res_df') is not None and not turn['res_df'].empty:
+                        with st.expander("Analysis Results & Details"):
+                            st.write(f"### {turn.get('plan', {}).get('title', 'Analysis Results')}")
+                            fig = create_chart(turn['res_df'], turn['plan'])
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                            st.dataframe(turn['res_df'], use_container_width=True)
+                            st.json(turn['plan'])
             
-            if st.button("Analyze"):
-                if user_question:
+            # New message input
+            user_question = st.chat_input("Ask a question about your dataset (e.g. Which region generated the most revenue?)")
+            
+            if user_question:
+                # Show instantly
+                with st.chat_message("user"):
+                    st.write(user_question)
+                    
+                with st.chat_message("assistant"):
                     with st.spinner("Analyzing with AI..."):
                         try:
-                            # 1. Get Plan
+                            # 1. Provide Context
                             metadata = {
                                 "columns": profile["columns"],
                                 "data_types": profile["data_types"],
@@ -117,37 +152,51 @@ def main():
                                 "categorical_cols": profile["categorical_cols"],
                                 "datetime_cols": profile["datetime_cols"]
                             }
-                            plan = generate_analysis_plan(user_question, metadata)
+                            recent_history = st.session_state.chat_history[-10:]
                             
-                            # Execute Plan
+                            # 2. Get Plan
+                            plan = generate_analysis_plan(user_question, metadata, history=recent_history)
+                            
+                            # 3. Execute
                             res_df, exe_meta = execute_analysis_plan(df, plan)
                             
-                            # Display Result DF
-                            st.write(f"### {plan.get('title', 'Analysis Results')}")
-                            st.dataframe(res_df, use_container_width=True)
-                            
+                            # 4. Display
                             if "warning" in exe_meta:
                                 st.warning(exe_meta["warning"])
                                 
-                            # Visualizer
-                            fig = create_chart(res_df, plan)
-                            if fig:
-                                st.plotly_chart(fig, use_container_width=True)
-                                
-                            # AI Explanation
                             small_res = res_df.head(20).to_csv(index=False)
-                            insight = generate_insight(user_question, small_res)
+                            insight = generate_insight(user_question, small_res, history=recent_history)
                             
-                            st.success(f"**AI Insight:**\n\n{insight}")
+                            st.write(insight)
                             
-                            with st.expander("How I analyzed this"):
+                            with st.expander("Analysis Results & Details", expanded=True):
+                                st.write(f"### {plan.get('title', 'Analysis Results')}")
+                                fig = create_chart(res_df, plan)
+                                if fig:
+                                    st.plotly_chart(fig, use_container_width=True)
+                                st.dataframe(res_df, use_container_width=True)
+                                st.write("**How I analyzed this:**")
                                 st.json(plan)
+                                
+                            # Append history
+                            st.session_state.chat_history.append({
+                                "question": user_question,
+                                "plan": plan,
+                                "res_df": res_df,
+                                "insight": insight
+                            })
+                            
+                            # Trim to 10
+                            if len(st.session_state.chat_history) > 10:
+                                st.session_state.chat_history = st.session_state.chat_history[-10:]
                                 
                         except ValueError as e:
                             st.error(f"Analysis could not be completed: {e}")
+                            st.stop()
                         except Exception as e:
                             st.error(f"An unexpected error occurred during AI analysis: {e}")
-                    
+                            st.stop()
+                            
         except pd.errors.EmptyDataError:
             st.error("Uploaded file is empty or invalid.")
         except Exception as e:
