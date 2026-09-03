@@ -5,3 +5,8 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+# Local debug / scratch artifacts
+git_log*.txt
+git_patch*.txt
+result_revert*.txt
+test_revert_output.txt
