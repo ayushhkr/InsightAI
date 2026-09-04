@@ -112,27 +112,45 @@ def main():
             st.header("Anomaly Detection")
             if st.button("Detect Anomalies"):
                 with st.spinner("Scanning dataset for anomalies..."):
-                    anomaly_results = detect_anomalies(df)
+                    st.session_state["anomaly_results"] = detect_anomalies(df)
+                    st.session_state["anomaly_explanation"] = None
                     
-                    total = anomaly_results.get("total_anomalies", 0)
-                    if total == 0:
-                        st.success("No numerical outliers were detected in this dataset.")
-                    else:
-                        st.warning(f"Found {total} anomalous rows.")
+            if "anomaly_results" in st.session_state:
+                anomaly_results = st.session_state["anomaly_results"]
+                total = anomaly_results.get("total_anomalies", 0)
+                
+                if total == 0:
+                    st.success("No numerical outliers were detected in this dataset.")
+                else:
+                    st.warning(f"Found {total} anomalous rows.")
+                    
+                    cols = anomaly_results.get("columns", {})
+                    for col_name, stats in cols.items():
+                        if stats["anomaly_count"] > 0:
+                            st.write(f"- **{col_name}**: {stats['anomaly_count']} anomalies "
+                                     f"(IQR Bounds: [{stats['lower_bound']}, {stats['upper_bound']}])")
+                                     
+                    st.write("### Anomalous Rows")
+                    anomaly_idx = anomaly_results.get("anomalous_indices", [])
+                    st.dataframe(df.loc[anomaly_idx], use_container_width=True)
+                    
+                    evidence = build_anomaly_evidence(df, anomaly_results)
+                    
+                    if st.button("Explain Anomalies with AI"):
+                        with st.spinner("Analyzing anomalies with Gemini..."):
+                            try:
+                                from src.llm import explain_anomalies, GeminiBusyError
+                                st.session_state["anomaly_explanation"] = explain_anomalies(evidence)
+                            except GeminiBusyError:
+                                st.error("Gemini is temporarily busy. Please try again in a moment.")
+                            except Exception as e:
+                                st.error(f"Failed to generate explanation. {e}")
+                                
+                    if st.session_state.get("anomaly_explanation"):
+                        st.markdown(st.session_state["anomaly_explanation"])
                         
-                        cols = anomaly_results.get("columns", {})
-                        for col_name, stats in cols.items():
-                            if stats["anomaly_count"] > 0:
-                                st.write(f"- **{col_name}**: {stats['anomaly_count']} anomalies "
-                                         f"(IQR Bounds: [{stats['lower_bound']}, {stats['upper_bound']}])")
-                                         
-                        st.write("### Anomalous Rows")
-                        anomaly_idx = anomaly_results.get("anomalous_indices", [])
-                        st.dataframe(df.loc[anomaly_idx], use_container_width=True)
-                        
-                        evidence = build_anomaly_evidence(df, anomaly_results)
-                        with st.expander("Show Evidence"):
-                            st.json(evidence)
+                    with st.expander("Technical Details"):
+                        st.json(evidence)
 
             st.divider()
             

@@ -219,3 +219,53 @@ def generate_insight(question: str, analysis_result: str, history: list = None) 
     raw_text = response.text
     cleaned_text = clean_markdown_output(raw_text)
     return cleaned_text
+
+def explain_anomalies(evidence: dict) -> str:
+    """
+    Generates a natural-language explanation of anomaly results deterministically mapped via IQR without recalculating statistics.
+    """
+    client = get_client()
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    
+    prompt = f"""
+    You are an AI Data Analyst communicating to a non-technical user.
+    The following evidence was ALREADY calculated deterministically using the IQR (Interquartile Range) algorithm.
+    
+    Evidence Pack:
+    {json.dumps(evidence, indent=2)}
+    
+    CRITICAL INSTRUCTIONS:
+    1. Do NOT recalculate or invent anomaly results.
+    2. Only describe facts contained in the evidence above.
+    3. Use the exact column names provided. Do not assume what a column means beyond its name and values (e.g., if a column is "Score", call it "Score", NOT "Profit" or "Revenue").
+    4. Do NOT claim a cause unless the evidence explicitly establishes it. Explicitly state when the cause cannot be determined.
+    5. Explain findings in simple, easily digestible language.
+    6. Recommendations must be framed strictly as investigation/validation steps unless the evidence supports a stronger conclusion.
+    
+    Format your response EXACTLY with these sections:
+    
+    ### Summary
+    [Briefly explain what was detected]
+    
+    ### Key Findings
+    - [Concise evidence-based observation 1]
+    - [Concise evidence-based observation 2]
+    
+    ### What This Could Mean
+    [Explain the statistical significance in plain language without inventing causes]
+    
+    ### What to Investigate
+    - [Practical investigation step 1 based only on available evidence]
+    - [Practical investigation step 2 based only on available evidence]
+    """
+    
+    response = call_gemini_with_retry(
+        client=client,
+        model_name=model_name,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.2
+        )
+    )
+    
+    return clean_markdown_output(response.text)
