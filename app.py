@@ -17,8 +17,10 @@ def initialize_chat_history():
         st.session_state.chat_history = []
 
 def main():
-    st.title("InsightAI")
-    st.subheader("AI-Powered Data Analyst")
+    st.title("📊 InsightAI")
+    st.markdown("### Your Intelligent Data Analyst")
+    st.markdown("Upload a CSV dataset to interact seamlessly with AI-powered analytics, deterministic statistical scanning, and deep conversational insights.")
+    st.markdown("<br>", unsafe_allow_html=True)
     
     initialize_chat_history()
     
@@ -42,14 +44,28 @@ def main():
                 st.error("The uploaded CSV is empty. Please upload a valid dataset.")
                 return
                 
-            # Metric cards
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Rows", profile["num_rows"])
-            col2.metric("Columns", profile["num_cols"])
-            col3.metric("Missing Values", sum(profile["missing_counts"].values()))
-            col4.metric("Duplicate Rows", profile["duplicate_rows"])
+            # Dashboard KPI Cards
+            st.markdown("---")
+            st.markdown("### 📈 Dataset Overview")
+            kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
             
-            with st.expander("Explore Dashboard", expanded=False):
+            kpi_col1.metric("Total Rows", f"{profile['num_rows']:,}")
+            kpi_col2.metric("Total Columns", f"{profile['num_cols']:,}")
+            
+            missing_val_count = sum(profile["missing_counts"].values())
+            dup_count = profile["duplicate_rows"]
+            
+            kpi_col3.metric("Missing Values", f"{missing_val_count:,}", 
+                            delta="Perfect" if missing_val_count == 0 else "Action Needed",
+                            delta_color="normal" if missing_val_count == 0 else "inverse")
+                            
+            kpi_col4.metric("Duplicate Rows", f"{dup_count:,}",
+                            delta="Clean" if dup_count == 0 else "Review Needed",
+                            delta_color="normal" if dup_count == 0 else "inverse")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            with st.expander("🔍 Explore Full Profile Details", expanded=False):
                 # --- Section 1: Dataset Preview ---
                 st.header("1. Dataset Preview")
                 st.dataframe(df.head(10), use_container_width=True)
@@ -71,9 +87,20 @@ def main():
                     st.info("No numerical columns available for summary statistics.")
                     
                 # --- Section 4: Data Quality ---
-                st.header("4. Data Quality")
-                st.write(f"**Total duplicate rows:** {profile['duplicate_rows']}")
-                st.write(f"**Total missing values across all columns:** {sum(profile['missing_counts'].values())}")
+                st.subheader("4. Data Quality Checks")
+                dq_col1, dq_col2 = st.columns(2)
+                
+                with dq_col1:
+                    if profile['duplicate_rows'] == 0:
+                        st.success("✅ **No duplicate rows found.**")
+                    else:
+                        st.warning(f"⚠️ **{profile['duplicate_rows']:,} duplicate rows** detected.")
+                        
+                with dq_col2:
+                    if sum(profile['missing_counts'].values()) == 0:
+                        st.success("✅ **No missing values found in any column.**")
+                    else:
+                        st.warning(f"⚠️ **{sum(profile['missing_counts'].values()):,} missing values** detected across the dataset.")
                 
                 st.divider()
                 
@@ -107,10 +134,12 @@ def main():
                         st.error(f"Could not generate {chart_type} chart. Error: {e}")
 
             st.divider()
-            
             # --- Anomaly Detection ---
-            st.header("Anomaly Detection")
-            if st.button("Detect Anomalies"):
+            st.markdown("---")
+            st.markdown("### 🚨 Anomaly Detection")
+            st.markdown("Scan your dataset for statistical outliers using IQR detection across numerical bounds.")
+            
+            if st.button("Detect Anomalies", type="primary"):
                 with st.spinner("Scanning dataset for anomalies..."):
                     st.session_state["anomaly_results"] = detect_anomalies(df)
                     st.session_state["anomaly_explanation"] = None
@@ -120,17 +149,18 @@ def main():
                 total = anomaly_results.get("total_anomalies", 0)
                 
                 if total == 0:
-                    st.success("No numerical outliers were detected in this dataset.")
+                    st.success("✅ No numerical outliers were detected in this dataset.")
                 else:
-                    st.warning(f"Found {total} anomalous rows.")
+                    st.error(f"🚨 **Found {total:,} anomalous rows**")
                     
+                    st.markdown("#### Affected Columns Focus")
                     cols = anomaly_results.get("columns", {})
                     for col_name, stats in cols.items():
                         if stats["anomaly_count"] > 0:
-                            st.write(f"- **{col_name}**: {stats['anomaly_count']} anomalies "
-                                     f"(IQR Bounds: [{stats['lower_bound']}, {stats['upper_bound']}])")
+                            st.write(f"- **`{col_name}`**: {stats['anomaly_count']} anomalies "
+                                     f"*(Bounds: [{stats['lower_bound']:.2f}, {stats['upper_bound']:.2f}])*")
                                      
-                    st.write("### Anomalous Rows")
+                    st.markdown("#### Anomalous Records Preview")
                     anomaly_idx = anomaly_results.get("anomalous_indices", [])
                     st.dataframe(df.loc[anomaly_idx], use_container_width=True)
                     
@@ -173,14 +203,16 @@ def main():
                         st.json(evidence)
 
             st.divider()
-            
             # --- AI Analysis (Conversational) ---
+            st.markdown("---")
+            
             colA, colB = st.columns([0.8, 0.2])
             with colA:
-                st.header("Ask your data")
+                st.markdown("### 💬 Ask Your Data")
+                st.markdown("Discuss your dataset naturally with the AI Data Analyst.")
             with colB:
                 if len(st.session_state.chat_history) > 0:
-                    if st.button("Clear conversation"):
+                    if st.button("🗑️ Clear Chat History"):
                         st.session_state.chat_history = []
                         st.rerun()
 
@@ -192,14 +224,15 @@ def main():
                     st.markdown(clean_markdown_output(turn["insight"]))
                     
                     if turn.get('res_df') is not None and not turn['res_df'].empty:
-                        with st.expander("Analysis Results & Details"):
-                            st.write(f"### {turn.get('plan', {}).get('title', 'Analysis Results')}")
+                        with st.expander("📊 View Data & Chart Details"):
+                            st.markdown(f"**{turn.get('plan', {}).get('title', 'Analysis Results')}**")
                             fig = create_chart(turn['res_df'], turn['plan'])
                             if fig:
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig, use_container_width=True, theme="streamlit")
                             st.dataframe(turn['res_df'], use_container_width=True)
+                            
+                            st.markdown("##### 🔍 How I Analyzed This:")
                             st.json(turn['plan'])
-            
             # New message input
             user_question = st.chat_input("Ask a question about your dataset (e.g. Which region generated the most revenue?)")
             
@@ -237,13 +270,14 @@ def main():
                             
                             st.markdown(cleaned_insight)
                             
-                            with st.expander("Analysis Results & Details", expanded=True):
-                                st.write(f"### {plan.get('title', 'Analysis Results')}")
+                            with st.expander("📊 View Data & Chart Details", expanded=True):
+                                st.markdown(f"**{plan.get('title', 'Analysis Results')}**")
                                 fig = create_chart(res_df, plan)
                                 if fig:
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.plotly_chart(fig, use_container_width=True, theme="streamlit")
                                 st.dataframe(res_df, use_container_width=True)
-                                st.write("**How I analyzed this:**")
+                                
+                                st.markdown("##### 🔍 How I Analyzed This:")
                                 st.json(plan)
                                 
                             # Append history
