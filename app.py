@@ -172,7 +172,7 @@ def main():
                                 from src.llm import explain_anomalies, GeminiBusyError
                                 st.session_state["anomaly_explanation"] = explain_anomalies(evidence)
                             except GeminiBusyError:
-                                st.session_state["anomaly_explanation"] = "⚠️ AI explanation is temporarily unavailable. The anomaly detection results are still available above."
+                                st.error("Gemini is temporarily busy. Please try again in a moment.")
                             except Exception as e:
                                 st.error(f"Failed to generate explanation. {e}")
                                 
@@ -192,7 +192,7 @@ def main():
                                     ans = answer_anomaly_question(anomaly_q, evidence)
                                     st.session_state["anomaly_qa_answer"] = ans
                                 except GeminiBusyError:
-                                    st.error("AI anomaly analysis is temporarily unavailable. Please try again later.")
+                                    st.error("Gemini is temporarily busy. Please try again in a moment.")
                                 except Exception as e:
                                     st.error(f"Failed to generate answer. {e}")
                                     
@@ -243,72 +243,64 @@ def main():
                     
                 with st.chat_message("assistant"):
                     with st.spinner("Analyzing with AI..."):
-                        # 1. Provide Context
-                        metadata = {
-                            "columns": profile["columns"],
-                            "data_types": profile["data_types"],
-                            "numerical_cols": profile["numerical_cols"],
-                            "categorical_cols": profile["categorical_cols"],
-                            "datetime_cols": profile["datetime_cols"]
-                        }
-                        recent_history = st.session_state.chat_history[-10:]
-                        
-                        # 2. Get Plan
                         try:
-                            plan = generate_analysis_plan(user_question, metadata, history=recent_history)
-                        except GeminiBusyError:
-                            st.error("AI analysis is temporarily unavailable. Please try again later.")
-                            st.stop()
-                        except Exception as e:
-                            st.error("An unexpected error occurred during AI analysis. Please try again.")
-                            st.stop()
+                            # 1. Provide Context
+                            metadata = {
+                                "columns": profile["columns"],
+                                "data_types": profile["data_types"],
+                                "numerical_cols": profile["numerical_cols"],
+                                "categorical_cols": profile["categorical_cols"],
+                                "datetime_cols": profile["datetime_cols"]
+                            }
+                            recent_history = st.session_state.chat_history[-10:]
                             
-                        # 3. Execute
-                        try:
+                            # 2. Get Plan
+                            plan = generate_analysis_plan(user_question, metadata, history=recent_history)
+                            
+                            # 3. Execute
                             res_df, exe_meta = execute_analysis_plan(df, plan)
+                            
+                            # 4. Display
+                            if "warning" in exe_meta:
+                                st.warning(exe_meta["warning"])
+                                
+                            small_res = res_df.head(20).to_csv(index=False)
+                            insight = generate_insight(user_question, small_res, history=recent_history)
+                            cleaned_insight = clean_markdown_output(insight)
+                            
+                            st.markdown(cleaned_insight)
+                            
+                            with st.expander("📊 View Data & Chart Details", expanded=True):
+                                st.markdown(f"**{plan.get('title', 'Analysis Results')}**")
+                                fig = create_chart(res_df, plan)
+                                if fig:
+                                    st.plotly_chart(fig, use_container_width=True, theme="streamlit")
+                                st.dataframe(res_df, use_container_width=True)
+                                
+                                st.markdown("##### 🔍 How I Analyzed This:")
+                                st.json(plan)
+                                
+                            # Append history
+                            st.session_state.chat_history.append({
+                                "question": user_question,
+                                "plan": plan,
+                                "res_df": res_df,
+                                "insight": cleaned_insight
+                            })
+                            
+                            # Trim to 10
+                            if len(st.session_state.chat_history) > 10:
+                                st.session_state.chat_history = st.session_state.chat_history[-10:]
+                                
+                        except GeminiBusyError:
+                            st.error("Gemini is temporarily busy. Please try again in a moment.")
+                            st.stop()
                         except ValueError as e:
                             st.error(f"Analysis could not be completed: {e}")
                             st.stop()
                         except Exception as e:
-                            st.error(f"Analysis could not be completed: {e}")
+                            st.error("An unexpected error occurred during AI analysis. Please try again.")
                             st.stop()
-                            
-                        # 4. Display
-                        if "warning" in exe_meta:
-                            st.warning(exe_meta["warning"])
-                            
-                        small_res = res_df.head(20).to_csv(index=False)
-                        try:
-                            insight = generate_insight(user_question, small_res, history=recent_history)
-                            cleaned_insight = clean_markdown_output(insight)
-                        except GeminiBusyError:
-                            cleaned_insight = "⚠️ AI explanation is temporarily unavailable, but the analysis results below were calculated successfully."
-                        except Exception as e:
-                            cleaned_insight = f"⚠️ Could not generate insight: {e}"
-                            
-                        st.markdown(cleaned_insight)
-                        
-                        with st.expander("📊 View Data & Chart Details", expanded=True):
-                            st.markdown(f"**{plan.get('title', 'Analysis Results')}**")
-                            fig = create_chart(res_df, plan)
-                            if fig:
-                                st.plotly_chart(fig, use_container_width=True, theme="streamlit")
-                            st.dataframe(res_df, use_container_width=True)
-                            
-                            st.markdown("##### 🔍 How I Analyzed This:")
-                            st.json(plan)
-                            
-                        # Append history
-                        st.session_state.chat_history.append({
-                            "question": user_question,
-                            "plan": plan,
-                            "res_df": res_df,
-                            "insight": cleaned_insight
-                        })
-                        
-                        # Trim to 10
-                        if len(st.session_state.chat_history) > 10:
-                            st.session_state.chat_history = st.session_state.chat_history[-10:]
                             
         except pd.errors.EmptyDataError:
             st.error("Uploaded file is empty or invalid.")
