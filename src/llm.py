@@ -228,14 +228,14 @@ def generate_insight(question: str, analysis_result: str, history: list = None) 
 
 def explain_anomalies(evidence: dict) -> str:
     """
-    Generates a natural-language explanation of anomaly results deterministically mapped via IQR without recalculating statistics.
+    Generates a natural-language explanation of Isolation Forest anomaly results without recalculating statistics.
     """
     client = get_client()
     model_name = "openai/gpt-oss-120b"
     
     prompt = f"""
     You are an AI Data Analyst communicating to a non-technical user.
-    The following evidence was ALREADY calculated deterministically using the IQR (Interquartile Range) algorithm.
+    The following evidence was ALREADY calculated by an Isolation Forest model.
     
     Evidence Pack:
     {json.dumps(evidence, indent=2)}
@@ -249,9 +249,10 @@ def explain_anomalies(evidence: dict) -> str:
     6. Do NOT claim a cause for an anomaly. You must explicitly state: "The available data does not establish the cause."
     7. Do not recommend checking formulas or contacting specific teams/departments/regions unless the evidence explicitly establishes they are relevant.
     8. Recommendations must be generic investigation steps grounded in the available evidence (e.g. "review the affected records", "verify the unusual values against the original source", "investigate whether multiple anomalous columns are related").
-    9. Every numerical claim must come directly from the supplied evidence. Do not invent business context.
-    10. Do not generate SQL, Python, formulas, or implementation code.
-    11. The explanation should work unchanged in structure for completely unrelated datasets.
+    9. Explain anomaly scores only as model scores: lower scores indicate records whose feature combinations the trained Isolation Forest isolated more readily. Median imputation is only preprocessing for missing numeric values and never explains why a record was flagged. Use supplied scores and actual feature values as evidence; do not invent score cutoffs.
+    10. Every numerical claim must come directly from the supplied evidence. Do not invent business context.
+    11. Do not generate SQL, Python, formulas, or implementation code.
+    12. The explanation should work unchanged in structure for completely unrelated datasets.
     
     Format your response EXACTLY with these sections:
     
@@ -289,7 +290,7 @@ def answer_anomaly_question(question: str, evidence: dict) -> str:
     prompt = f"""
     You are an AI Data Analyst answering a follow-up question about detected anomalies.
     
-    Evidence Pack (Calculated deterministically via IQR):
+    Evidence Pack (Calculated by Isolation Forest):
     {json.dumps(evidence, indent=2)}
     
     User Question: "{question}"
@@ -297,7 +298,7 @@ def answer_anomaly_question(question: str, evidence: dict) -> str:
     CRITICAL INSTRUCTIONS:
     1. Answer ONLY using the supplied evidence. Never invent numbers.
     2. Use exact column names from the evidence.
-    3. Explain statistical anomaly detection using the supplied IQR bounds (lower_bound, upper_bound) when relevant to the question.
+    3. When relevant, explain anomalies using only the supplied Isolation Forest anomaly scores, actual feature values, and the model's learned isolation behavior. Lower scores indicate records whose feature combinations the trained model isolated more readily. Median imputation is only preprocessing for missing numeric values and does not explain why a record was flagged; do not invent score cutoffs.
     4. Never invent business/domain causes for why an anomaly occurred.
     5. Never refer to rows as orders, customers, transactions, employees, etc., unless explicitly stated in the evidence.
     6. If the evidence is insufficient to answer the question, explicitly say so.

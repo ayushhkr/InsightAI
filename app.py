@@ -137,7 +137,7 @@ def main():
             # --- Anomaly Detection ---
             st.markdown("---")
             st.markdown("### 🚨 Anomaly Detection")
-            st.markdown("Scan your dataset for statistical outliers using IQR detection across numerical bounds.")
+            st.markdown("Scan your dataset for unusual numerical patterns using Isolation Forest.")
             
             if st.button("Detect Anomalies", type="primary"):
                 with st.spinner("Scanning dataset for anomalies..."):
@@ -153,12 +153,12 @@ def main():
                 else:
                     st.error(f"🚨 **Found {total:,} anomalous rows**")
                     
-                    st.markdown("#### Affected Columns Focus")
+                    st.markdown("#### Model Features")
                     cols = anomaly_results.get("columns", {})
                     for col_name, stats in cols.items():
                         if stats["anomaly_count"] > 0:
-                            st.write(f"- **`{col_name}`**: {stats['anomaly_count']} anomalies "
-                                     f"*(Bounds: [{stats['lower_bound']:.2f}, {stats['upper_bound']:.2f}])*")
+                            st.write(f"- **`{col_name}`**: included in the model "
+                                     f"*({stats['missing_values_imputed']} missing values median-imputed)*")
                                      
                     st.markdown("#### Anomalous Records Preview")
                     anomaly_idx = anomaly_results.get("anomalous_indices", [])
