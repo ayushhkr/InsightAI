@@ -137,4 +137,15 @@ InsightAI combines traditional data analysis, machine learning, and generative A
                          └────────┬────────┘
                                   ▼
                            AI-Generated
+
                               Insight
+📌 Project Status
+
+InsightAI is an active prototype demonstrating an AI-powered analytics workflow with machine-learning anomaly detection and natural-language data exploration.
+
+👨‍💻 Author
+
+Ayush Kumar
+
+GitHub:
+https://github.com/ayushhkr/InsightAI
