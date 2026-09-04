@@ -8,7 +8,7 @@ from src.profiler import profile_dataset
 from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram, create_chart
 from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output, GeminiBusyError
 from src.analyzer import execute_analysis_plan
-from src.anomaly import detect_anomalies
+from src.anomaly import detect_anomalies, build_anomaly_evidence
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
 
@@ -129,6 +129,10 @@ def main():
                         st.write("### Anomalous Rows")
                         anomaly_idx = anomaly_results.get("anomalous_indices", [])
                         st.dataframe(df.loc[anomaly_idx], use_container_width=True)
+                        
+                        evidence = build_anomaly_evidence(df, anomaly_results)
+                        with st.expander("Show Evidence"):
+                            st.json(evidence)
 
             st.divider()
             

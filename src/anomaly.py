@@ -62,3 +62,49 @@ def detect_anomalies(df: pd.DataFrame) -> dict:
     result["total_anomalies"] = len(result["anomalous_indices"])
     
     return result
+
+def build_anomaly_evidence(df: pd.DataFrame, anomaly_result: dict) -> dict:
+    """
+    Constructs a generic evidence representation from the anomaly detection results.
+    Creates a JSON-serializable dictionary showcasing analytical context for downstream analysis.
+    """
+    evidence = {
+        "summary": {
+            "total_anomalies_found": anomaly_result.get("total_anomalies", 0),
+            "affected_columns": []
+        },
+        "anomalous_data_samples": [],
+        "statistical_bounds": {}
+    }
+    
+    total = anomaly_result.get("total_anomalies", 0)
+    if total == 0 or df is None or df.empty:
+        return evidence
+        
+    cols = anomaly_result.get("columns", {})
+    affected_cols = [k for k, v in cols.items() if v.get("anomaly_count", 0) > 0]
+    
+    evidence["summary"]["affected_columns"] = affected_cols
+    
+    for c in affected_cols:
+        evidence["statistical_bounds"][c] = {
+            "q1": cols[c].get("q1"),
+            "q3": cols[c].get("q3"),
+            "iqr": cols[c].get("iqr"),
+            "lower_bound": cols[c].get("lower_bound"),
+            "upper_bound": cols[c].get("upper_bound"),
+            "anomaly_count": cols[c].get("anomaly_count")
+        }
+        
+    anomaly_indices = anomaly_result.get("anomalous_indices", [])
+    if anomaly_indices:
+        # Prevent NaNs from breaking JSON parsers by safely enforcing Nones
+        subset = df.loc[anomaly_indices]
+        subset = subset.where(pd.notnull(subset), None)
+        # Capture absolute index pointers
+        subset = subset.assign(__original_index__=subset.index)
+        
+        records = subset.to_dict(orient="records")
+        evidence["anomalous_data_samples"] = records
+        
+    return evidence
