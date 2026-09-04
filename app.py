@@ -9,6 +9,7 @@ from src.visualizer import create_bar_chart, create_line_chart, create_scatter_c
 from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output, GeminiBusyError
 from src.analyzer import execute_analysis_plan
 from src.anomaly import detect_anomalies, build_anomaly_evidence
+from src.report import build_report
 
 st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layout="wide")
 
@@ -233,6 +234,9 @@ def main():
                             
                             st.markdown("##### 🔍 How I Analyzed This:")
                             st.json(turn['plan'])
+
+            report_slot = st.empty()
+
             # New message input
             user_question = st.chat_input("Ask a question about your dataset (e.g. Which region generated the most revenue?)")
             
@@ -279,7 +283,7 @@ def main():
                                 
                                 st.markdown("##### 🔍 How I Analyzed This:")
                                 st.json(plan)
-                                
+
                             # Append history
                             st.session_state.chat_history.append({
                                 "question": user_question,
@@ -301,7 +305,21 @@ def main():
                         except Exception as e:
                             st.error("An unexpected error occurred during AI analysis. Please try again.")
                             st.stop()
-                            
+
+            report_html = build_report(
+                profile=profile,
+                dataset=df,
+                analysis_history=st.session_state.chat_history,
+                anomaly_result=st.session_state.get("anomaly_results"),
+                anomaly_explanation=st.session_state.get("anomaly_explanation"),
+            )
+            report_slot.download_button(
+                "Download Full Report",
+                data=report_html,
+                file_name="insightai_full_report.html",
+                mime="text/html",
+            )
+
         except pd.errors.EmptyDataError:
             st.error("Uploaded file is empty or invalid.")
         except Exception as e:
