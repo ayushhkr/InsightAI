@@ -237,10 +237,15 @@ def explain_anomalies(evidence: dict) -> str:
     CRITICAL INSTRUCTIONS:
     1. Do NOT recalculate or invent anomaly results.
     2. Only describe facts contained in the evidence above.
-    3. Use the exact column names provided. Do not assume what a column means beyond its name and values (e.g., if a column is "Score", call it "Score", NOT "Profit" or "Revenue").
-    4. Do NOT claim a cause unless the evidence explicitly establishes it. Explicitly state when the cause cannot be determined.
-    5. Explain findings in simple, easily digestible language.
-    6. Recommendations must be framed strictly as investigation/validation steps unless the evidence supports a stronger conclusion.
+    3. Refer to observations ONLY as "rows", "records", "values", or the exact column name. NEVER call them "orders", "transactions", "customers", "employees", etc.
+    4. NEVER categorize columns as financial, operational, sales, performance, etc.
+    5. Use exact column names from the evidence. Do not infer what a numerical column represents beyond its name and observed values.
+    6. Do NOT claim a cause for an anomaly. You must explicitly state: "The available data does not establish the cause."
+    7. Do not recommend checking formulas or contacting specific teams/departments/regions unless the evidence explicitly establishes they are relevant.
+    8. Recommendations must be generic investigation steps grounded in the available evidence (e.g. "review the affected records", "verify the unusual values against the original source", "investigate whether multiple anomalous columns are related").
+    9. Every numerical claim must come directly from the supplied evidence. Do not invent business context.
+    10. Do not generate SQL, Python, formulas, or implementation code.
+    11. The explanation should work unchanged in structure for completely unrelated datasets.
     
     Format your response EXACTLY with these sections:
     
