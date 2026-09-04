@@ -274,3 +274,41 @@ def explain_anomalies(evidence: dict) -> str:
     )
     
     return clean_markdown_output(response.text)
+
+def answer_anomaly_question(question: str, evidence: dict) -> str:
+    """
+    Answers a follow-up user question about the detected anomalies based purely on the generated evidence package.
+    """
+    client = get_client()
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    
+    prompt = f"""
+    You are an AI Data Analyst answering a follow-up question about detected anomalies.
+    
+    Evidence Pack (Calculated deterministically via IQR):
+    {json.dumps(evidence, indent=2)}
+    
+    User Question: "{question}"
+    
+    CRITICAL INSTRUCTIONS:
+    1. Answer ONLY using the supplied evidence. Never invent numbers.
+    2. Use exact column names from the evidence.
+    3. Explain statistical anomaly detection using the supplied IQR bounds (lower_bound, upper_bound) when relevant to the question.
+    4. Never invent business/domain causes for why an anomaly occurred.
+    5. Never refer to rows as orders, customers, transactions, employees, etc., unless explicitly stated in the evidence.
+    6. If the evidence is insufficient to answer the question, explicitly say so.
+    7. If asked WHY an anomaly happened in the real world, explicitly state that the supplied evidence does not establish the real-world cause.
+    8. Do not generate SQL, Python, or implementation code.
+    9. Keep the answer concise.
+    """
+    
+    response = call_gemini_with_retry(
+        client=client,
+        model_name=model_name,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.2
+        )
+    )
+    
+    return clean_markdown_output(response.text)

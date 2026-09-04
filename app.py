@@ -149,6 +149,26 @@ def main():
                     if st.session_state.get("anomaly_explanation"):
                         st.markdown(st.session_state["anomaly_explanation"])
                         
+                    st.write("### Ask about these anomalies")
+                    anomaly_q = st.text_input("Ask a follow-up question", placeholder="Why was row 13 flagged?", label_visibility="collapsed")
+                    
+                    if st.button("Ask AI about Anomalies"):
+                        if not anomaly_q.strip():
+                            st.warning("Please enter a question.")
+                        else:
+                            with st.spinner("Asking Gemini..."):
+                                try:
+                                    from src.llm import answer_anomaly_question, GeminiBusyError
+                                    ans = answer_anomaly_question(anomaly_q, evidence)
+                                    st.session_state["anomaly_qa_answer"] = ans
+                                except GeminiBusyError:
+                                    st.error("Gemini is temporarily busy. Please try again in a moment.")
+                                except Exception as e:
+                                    st.error(f"Failed to generate answer. {e}")
+                                    
+                    if st.session_state.get("anomaly_qa_answer"):
+                        st.markdown(st.session_state["anomaly_qa_answer"])
+                        
                     with st.expander("Technical Details"):
                         st.json(evidence)
 
