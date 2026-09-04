@@ -169,7 +169,7 @@ def main():
                     if st.button("Explain Anomalies with AI"):
                         with st.spinner("Analyzing anomalies with Gemini..."):
                             try:
-                                from src.llm import explain_anomalies, GeminiBusyError
+                                from src.llm import explain_anomalies
                                 st.session_state["anomaly_explanation"] = explain_anomalies(evidence)
                             except GeminiBusyError:
                                 st.error("Gemini is temporarily busy. Please try again in a moment.")
@@ -188,7 +188,7 @@ def main():
                         else:
                             with st.spinner("Asking Gemini..."):
                                 try:
-                                    from src.llm import answer_anomaly_question, GeminiBusyError
+                                    from src.llm import answer_anomaly_question
                                     ans = answer_anomaly_question(anomaly_q, evidence)
                                     st.session_state["anomaly_qa_answer"] = ans
                                 except GeminiBusyError:

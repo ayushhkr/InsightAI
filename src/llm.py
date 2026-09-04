@@ -1,13 +1,12 @@
 """
 llm.py
-Handles interactions with the Gemini API (via google-genai); converts natural language queries into analysis plans.
+Handles interactions with the Groq API; converts natural language queries into analysis plans.
 """
 import os
 import json
 import re
 import time
-from google import genai
-from google.genai import types
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,14 +44,21 @@ def clean_markdown_output(text: str) -> str:
     return cleaned.strip()
 
 def get_client():
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY is not set in environment variables.")
-    return genai.Client(api_key=api_key)
+        raise ValueError("GROQ_API_KEY is not set in environment variables.")
+    return Groq(api_key=api_key)
 
-def call_gemini_with_retry(client, model_name: str, contents: str, config: types.GenerateContentConfig, max_retries: int = 3):
+def call_groq_with_retry(
+    client,
+    model_name: str,
+    contents: str,
+    temperature: float,
+    response_format: dict | None = None,
+    max_retries: int = 3,
+):
     """
-    Calls Gemini API with automatic exponential backoff retries for 503/UNAVAILABLE temporary errors.
+    Calls Groq API with automatic exponential backoff retries for temporary errors.
     Backoff delays: 2s -> 4s -> 8s.
     Does NOT retry 400, 401, 403, 404 client/authentication errors.
     """
@@ -60,11 +66,14 @@ def call_gemini_with_retry(client, model_name: str, contents: str, config: types
     
     for attempt in range(max_retries + 1):
         try:
-            return client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=config
-            )
+            request_args = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": contents}],
+                "temperature": temperature,
+            }
+            if response_format:
+                request_args["response_format"] = response_format
+            return client.chat.completions.create(**request_args)
         except Exception as e:
             err_str = str(e).upper()
             status_code = getattr(e, 'code', None) or getattr(e, 'status_code', None)
@@ -87,7 +96,8 @@ def call_gemini_with_retry(client, model_name: str, contents: str, config: types
                 "HIGH DEMAND" in err_str or
                 "TEMPORARILY" in err_str or
                 "RESOURCE_EXHAUSTED" in err_str or
-                "OVERLOADED" in err_str
+                "OVERLOADED" in err_str or
+                "RATE LIMIT" in err_str
             )
             
             if is_transient_error and attempt < max_retries:
@@ -101,7 +111,7 @@ def call_gemini_with_retry(client, model_name: str, contents: str, config: types
 
 def generate_analysis_plan(question: str, dataframe_metadata: dict, history: list = None) -> dict:
     client = get_client()
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    model_name = "openai/gpt-oss-120b"
     
     if history is None:
         history = []
@@ -147,25 +157,23 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
     If the question cannot be answered, return {{"operation": "describe", "title": "Cannot Answer", "chart": "none", "group_column": null, "metric": null, "aggregation": null, "filter": null, "sort": null, "top_n": null}}.
     """
     
-    response = call_gemini_with_retry(
+    response = call_groq_with_retry(
         client=client,
         model_name=model_name,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.1
-        )
+        temperature=0.1,
+        response_format={"type": "json_object"},
     )
     
     try:
-        plan = json.loads(response.text)
+        plan = json.loads(response.choices[0].message.content)
         return plan
     except Exception as e:
-        raise ValueError(f"Failed to parse Gemini response as JSON: {response.text}") from e
+        raise ValueError(f"Failed to parse Groq response as JSON: {response.choices[0].message.content}") from e
 
 def generate_insight(question: str, analysis_result: str, history: list = None) -> str:
     client = get_client()
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    model_name = "openai/gpt-oss-120b"
     
     if history is None:
         history = []
@@ -207,16 +215,14 @@ def generate_insight(question: str, analysis_result: str, history: list = None) 
     - Make sure every heading (**Key Findings:** and **Recommendations:**) is on its own separate line.
     """
     
-    response = call_gemini_with_retry(
+    response = call_groq_with_retry(
         client=client,
         model_name=model_name,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.2
-        )
+        temperature=0.2,
     )
     
-    raw_text = response.text
+    raw_text = response.choices[0].message.content
     cleaned_text = clean_markdown_output(raw_text)
     return cleaned_text
 
@@ -225,7 +231,7 @@ def explain_anomalies(evidence: dict) -> str:
     Generates a natural-language explanation of anomaly results deterministically mapped via IQR without recalculating statistics.
     """
     client = get_client()
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    model_name = "openai/gpt-oss-120b"
     
     prompt = f"""
     You are an AI Data Analyst communicating to a non-technical user.
@@ -264,23 +270,21 @@ def explain_anomalies(evidence: dict) -> str:
     - [Practical investigation step 2 based only on available evidence]
     """
     
-    response = call_gemini_with_retry(
+    response = call_groq_with_retry(
         client=client,
         model_name=model_name,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.2
-        )
+        temperature=0.2,
     )
     
-    return clean_markdown_output(response.text)
+    return clean_markdown_output(response.choices[0].message.content)
 
 def answer_anomaly_question(question: str, evidence: dict) -> str:
     """
     Answers a follow-up user question about the detected anomalies based purely on the generated evidence package.
     """
     client = get_client()
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    model_name = "openai/gpt-oss-120b"
     
     prompt = f"""
     You are an AI Data Analyst answering a follow-up question about detected anomalies.
@@ -302,13 +306,11 @@ def answer_anomaly_question(question: str, evidence: dict) -> str:
     9. Keep the answer concise.
     """
     
-    response = call_gemini_with_retry(
+    response = call_groq_with_retry(
         client=client,
         model_name=model_name,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.2
-        )
+        temperature=0.2,
     )
     
-    return clean_markdown_output(response.text)
+    return clean_markdown_output(response.choices[0].message.content)
