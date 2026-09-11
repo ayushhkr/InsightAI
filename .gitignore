@@ -10,3 +10,6 @@ git_log*.txt
 git_patch*.txt
 result_revert*.txt
 test_revert_output.txt
+llm_out.txt
+out_gem.txt
+output_anomaly.txt
