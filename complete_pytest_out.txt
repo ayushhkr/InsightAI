@@ -1,0 +1,43 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\akayu\OneDrive\Desktop\InsightAI\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\akayu\OneDrive\Desktop\InsightAI
+plugins: anyio-4.14.2
+collecting ... collected 10 items
+
+tests/test_analyzer.py::test_analyzer_empty PASSED                       [ 10%]
+tests/test_analyzer.py::test_analyzer_groupby FAILED                     [ 20%]
+tests/test_anomaly.py::test_anomaly_empty_df PASSED                      [ 30%]
+tests/test_anomaly.py::test_anomaly_only_text PASSED                     [ 40%]
+tests/test_anomaly.py::test_anomaly_with_nan PASSED                      [ 50%]
+tests/test_anomaly.py::test_anomaly_constant_value PASSED                [ 60%]
+tests/test_formatting.py::test_formatting PASSED                         [ 70%]
+tests/test_llm_phase3.py::test PASSED                                    [ 80%]
+tests/test_profiler.py::test_profile_empty PASSED                        [ 90%]
+tests/test_profiler.py::test_profile_with_nans_and_dupes PASSED          [100%]
+
+================================== FAILURES ===================================
+____________________________ test_analyzer_groupby ____________________________
+src\analyzer.py:124: in execute_analysis_plan
+    raise ValueError(f"Unsupported operation: {operation}")
+E   ValueError: Unsupported operation: None
+
+During handling of the above exception, another exception occurred:
+tests\test_analyzer.py:21: in test_analyzer_groupby
+    res, meta = execute_analysis_plan(df, plan)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\analyzer.py:135: in execute_analysis_plan
+    raise ValueError(f"Execution Error: {str(e)}")
+E   ValueError: Execution Error: Unsupported operation: None
+============================== warnings summary ===============================
+tests/test_formatting.py::test_formatting
+tests/test_llm_phase3.py::test
+tests/test_profiler.py::test_profile_with_nans_and_dupes
+  C:\Users\akayu\OneDrive\Desktop\InsightAI\src\profiler.py:28: Pandas4Warning: For backward compatibility, 'str' dtypes are included by select_dtypes when 'object' dtype is specified. This behavior is deprecated and will be removed in a future version. Explicitly pass 'str' to `include` to select them, or to `exclude` to remove them and silence this warning.
+  See https://pandas.pydata.org/docs/user_guide/migration-3-strings.html#string-migration-select-dtypes for details on how to write code that works with pandas 2 and 3.
+    categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_analyzer.py::test_analyzer_groupby - ValueError: Execution ...
+============= 1 failed, 9 passed, 3 warnings in 94.92s (0:01:34) ==============
