@@ -2,6 +2,7 @@
 profiler.py
 Responsible for analyzing and profiling uploaded datasets (e.g., getting missing values, data types, summary statistics).
 """
+import hashlib
 import pandas as pd
 
 def profile_dataset(df: pd.DataFrame) -> dict:
@@ -35,6 +36,7 @@ def profile_dataset(df: pd.DataFrame) -> dict:
         desc_stats = {}
         
     return {
+        "dataset_fingerprint": hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values.tobytes()).hexdigest(),
         "num_rows": num_rows,
         "num_cols": num_cols,
         "columns": columns,

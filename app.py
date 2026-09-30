@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from src.profiler import profile_dataset
 from src.visualizer import create_bar_chart, create_line_chart, create_scatter_chart, create_histogram, create_chart
-from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output, GeminiBusyError
+from src.llm import generate_analysis_plan, generate_insight, clean_markdown_output, LLMTransientError
 from src.analyzer import execute_analysis_plan
 from src.anomaly import detect_anomalies, build_anomaly_evidence
 from src.report import build_report
@@ -279,6 +279,7 @@ def main():
                         try:
                             # 1. Provide Context
                             metadata = {
+                                "dataset_fingerprint": profile.get("dataset_fingerprint"),
                                 "columns": profile["columns"],
                                 "data_types": profile["data_types"],
                                 "numerical_cols": profile["numerical_cols"],
@@ -325,8 +326,8 @@ def main():
                             if len(st.session_state.chat_history) > 10:
                                 st.session_state.chat_history = st.session_state.chat_history[-10:]
                                 
-                        except GeminiBusyError:
-                            st.error("Gemini is temporarily busy. Please try again in a moment.")
+                        except LLMTransientError:
+                            st.error("The LLM service is temporarily busy. Please try again in a moment.")
                             st.stop()
                         except ValueError as e:
                             st.error(f"Analysis could not be completed: {e}")

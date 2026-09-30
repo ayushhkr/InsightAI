@@ -5,7 +5,8 @@ import hashlib, json, re
 class LLMResponseCache:
     def __init__(self, max_entries: int = 128): self.max_entries, self._items = max_entries, {}
     def key(self, dataset_metadata: dict, question: str, history: list, model_name: str) -> str | None:
-        payload = {"dataset": dataset_metadata, "question": " ".join(question.lower().split()), "history": history or [], "model": model_name}
+        dataset_fingerprint = dataset_metadata.get("dataset_fingerprint") or hashlib.sha256(json.dumps(dataset_metadata, sort_keys=True, default=str).encode()).hexdigest()
+        payload = {"dataset_fingerprint": dataset_fingerprint, "question": " ".join(question.lower().split()), "history": history or [], "model": model_name}
         serialized = json.dumps(payload, sort_keys=True, default=str)
         if re.search(r"(?i)(api[_-]?key|password|secret|token)\s*[:=]", serialized): return None
         return hashlib.sha256(serialized.encode()).hexdigest()

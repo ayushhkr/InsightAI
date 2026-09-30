@@ -6,14 +6,24 @@ import os
 import json
 import re
 import time
+import pandas as pd
 from groq import Groq
 from dotenv import load_dotenv
+from src.llm_cache import LLMResponseCache
+from src.plan_validation import PlanValidationError, validate_analysis_plan
 
 load_dotenv()
 
-class GeminiBusyError(Exception):
-    """Raised when the Gemini API is temporarily unavailable or experiencing high demand after retries."""
-    pass
+class LLMServiceError(Exception):
+    """The configured LLM service could not complete a request."""
+
+class LLMTransientError(LLMServiceError):
+    """The LLM service remained temporarily unavailable after retries."""
+
+class LLMValidationError(LLMServiceError):
+    """The LLM returned a response that is not a valid analysis plan."""
+
+_PLAN_CACHE = LLMResponseCache()
 
 def clean_markdown_output(text: str) -> str:
     """
@@ -86,7 +96,7 @@ def call_groq_with_retry(
                 is_non_retryable = True
                 
             if is_non_retryable:
-                raise e
+                raise LLMServiceError("The LLM service rejected the request.") from e
                 
             # Check if retryable 503 or transient server busy error
             is_transient_error = (
@@ -105,9 +115,9 @@ def call_groq_with_retry(
                 time.sleep(delay)
                 continue
             elif is_transient_error:
-                raise GeminiBusyError("Gemini is temporarily busy. Please try again in a moment.") from e
+                raise LLMTransientError("The LLM service is temporarily busy. Please try again in a moment.") from e
             else:
-                raise e
+                raise LLMServiceError("The LLM service request failed.") from e
 
 def generate_analysis_plan(question: str, dataframe_metadata: dict, history: list = None) -> dict:
     client = get_client()
@@ -115,6 +125,10 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
     
     if history is None:
         history = []
+    cache_key = _PLAN_CACHE.key(dataframe_metadata, question, history, model_name)
+    cached = _PLAN_CACHE.get(cache_key)
+    if cached is not None:
+        return cached.copy()
         
     history_str = ""
     for idx, turn in enumerate(history):
@@ -141,9 +155,12 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
       "group_column": "<column name or null>",
       "metric": "<column name or null>",
       "aggregation": "sum" | "mean" | "count" | "min" | "max" | null,
-      "filter": "<simple condition or null>",
+      "filter": {"conditions": [{"column": "<column>", "operator": "==|!=|>|<|>=|<=|contains|startswith|endswith|in|not_in|is_null|is_not_null|between", "value": "<value>"}], "logic": "AND|OR"} | null,
       "sort": "ascending" | "descending" | null,
       "top_n": <integer or null>,
+      "date_column": "<column name or null>",
+      "date_range": {"start": "ISO date", "end": "ISO date"} | null,
+      "correlation_columns": ["<numeric column>"] | null,
       "chart": "bar" | "line" | "scatter" | "histogram" | "none",
       "title": "<A short title for the chart/analysis>"
     }}
@@ -152,6 +169,7 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
     - Use the conversation history to understand context if the query is a follow-up (e.g. "What about quantity?").
     - For strategy or business questions (e.g. "How can I increase sales in [X]?"), use `"operation": "groupby"`, set `"group_column"` to a categorical column like region, category, or product, `"metric"` to "revenue" (or quantity), `"aggregation"` to "sum", and `"sort"` to "descending".
     - Select a sensible `chart` type (e.g. bar for categorical comparison, line for trend/time-based, scatter for 2 numerical, histogram for distribution).
+    - For filters, always use the structured filter object. Never emit Python, pandas, SQL, or expression strings.
     - If a column like 'revenue' is asked for but does not exist in columns, specify `"metric": "revenue"` and the analyzer will attempt to calculate it automatically if price and quantity exist.
     
     If the question cannot be answered, return {{"operation": "describe", "title": "Cannot Answer", "chart": "none", "group_column": null, "metric": null, "aggregation": null, "filter": null, "sort": null, "top_n": null}}.
@@ -167,9 +185,15 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
     
     try:
         plan = json.loads(response.choices[0].message.content)
-        return plan
+        # Validate the LLM output now; execution validates it again against the real dataframe.
+        schema_df = pd.DataFrame({column: pd.Series(dtype=dataframe_metadata.get("data_types", {}).get(column, "object")) for column in dataframe_metadata["columns"]})
+        plan = validate_analysis_plan(plan, schema_df)
+        _PLAN_CACHE.set(cache_key, plan)
+        return plan.copy()
+    except PlanValidationError as e:
+        raise LLMValidationError(f"LLM returned an invalid analysis plan: {e}") from e
     except Exception as e:
-        raise ValueError(f"Failed to parse Groq response as JSON: {response.choices[0].message.content}") from e
+        raise LLMValidationError(f"Failed to parse Groq response as JSON: {response.choices[0].message.content}") from e
 
 def generate_insight(question: str, analysis_result: str, history: list = None) -> str:
     client = get_client()

@@ -45,30 +45,28 @@ def validate_filter(filter_spec: Any, df: pd.DataFrame) -> dict | None:
                 raise FilterValidationError(f"{operator} requires value to be a list.")
         elif operator not in {"is_null", "is_not_null"} and "value" not in condition:
             raise FilterValidationError(f"{operator} requires a value.")
-        _validate_value_compatibility(df[column], operator, value)
+        value = _normalize_value(df[column], operator, value)
         normalized.append({"column": column, "operator": operator, "value": value})
     return {"conditions": normalized, "logic": logic}
 
 
-def _validate_value_compatibility(series: pd.Series, operator: str, value: Any) -> None:
+def _normalize_value(series: pd.Series, operator: str, value: Any) -> Any:
     if operator in {"is_null", "is_not_null"}:
-        return
+        return value
     values = value if operator in {"between", "in", "not_in"} else [value]
+    if pd.api.types.is_numeric_dtype(series) and operator in {"==", "!=", ">", "<", ">=", "<=", "between", "in", "not_in"}:
+        try: converted = pd.to_numeric(pd.Series(values), errors="raise").tolist()
+        except (TypeError, ValueError) as exc: raise FilterValidationError("Filter values must be numeric for this column.") from exc
+        return converted if operator in {"between", "in", "not_in"} else converted[0]
+    if pd.api.types.is_datetime64_any_dtype(series) and operator in {"==", "!=", ">", "<", ">=", "<=", "between", "in", "not_in"}:
+        try: converted = pd.to_datetime(values, errors="raise").tolist()
+        except (TypeError, ValueError) as exc: raise FilterValidationError("Filter values must be dates for this column.") from exc
+        return converted if operator in {"between", "in", "not_in"} else converted[0]
     if operator in {">", "<", ">=", "<=", "between"}:
-        if pd.api.types.is_numeric_dtype(series):
-            try:
-                pd.to_numeric(pd.Series(values), errors="raise")
-            except (TypeError, ValueError) as exc:
-                raise FilterValidationError("Filter values must be numeric for this column.") from exc
-        elif pd.api.types.is_datetime64_any_dtype(series):
-            try:
-                pd.to_datetime(values, errors="raise")
-            except (TypeError, ValueError) as exc:
-                raise FilterValidationError("Filter values must be dates for this column.") from exc
-        else:
-            raise FilterValidationError("Comparison operators require numeric or datetime columns.")
+        raise FilterValidationError("Comparison operators require numeric or datetime columns.")
     if operator in {"contains", "startswith", "endswith"} and not pd.api.types.is_string_dtype(series):
         raise FilterValidationError(f"{operator} requires a string column.")
+    return value
 
 
 def apply_filter(df: pd.DataFrame, filter_spec: dict | None) -> pd.DataFrame:
