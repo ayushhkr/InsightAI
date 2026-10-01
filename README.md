@@ -6,6 +6,29 @@ InsightAI is an interactive AI-powered analytics workspace that allows users to 
 
 The goal is to make data analysis accessible without requiring users to write SQL, Python, or complex analytical queries.
 
+## Backend reliability and data handling
+
+The reusable loading layer supports CSV, XLSX, JSON, and Parquet files. It applies centrally configured file-size, row, and column limits and returns clear errors rather than truncating data. The current Streamlit upload flow remains CSV-only.
+
+`src.data_quality` provides non-mutating checks for missing values, duplicate records and identifier-like values, invalid dates, constant fields, high-cardinality categorical fields, suspicious numerical values, and basic type inconsistencies. It also offers an InsightAI-specific heuristic score with visible component scores and deductions; it is not an industry-standard quality metric.
+
+Possible email, phone, address-like, and identifier-like data is flagged as a lightweight warning only. It does not establish a legal PII classification or compliance status. Dataset content is treated as untrusted when included in LLM prompts, and structured plans are validated before execution. Spreadsheet-export helpers escape values that could be interpreted as formulas.
+
+The optional DuckDB backend supports a narrow, validated set of aggregation and ranking operations; the normal Pandas path remains the default.
+
+## Evaluation and tests
+
+The deterministic offline benchmark in `eval/` checks structured plan validity, operations, selected columns, filters, numerical results (with an explicit tolerance), and ranking against a controlled dataset. It does not call Groq or claim general model performance.
+
+`eval.integration_runner` is a separately invoked, optional live planning check for a configured Groq environment; it is not run by pytest or CI.
+
+Run the tests and benchmark with:
+
+```bash
+python -m pytest -q
+python -m eval.runner
+```
+
 ---
 
 ## 🚀 Features

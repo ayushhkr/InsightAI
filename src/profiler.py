@@ -2,7 +2,6 @@
 profiler.py
 Responsible for analyzing and profiling uploaded datasets (e.g., getting missing values, data types, summary statistics).
 """
-import hashlib
 import pandas as pd
 from src.dataset_fingerprint import dataframe_fingerprint
 
@@ -27,7 +26,7 @@ def profile_dataset(df: pd.DataFrame) -> dict:
     duplicate_rows = df.duplicated().sum()
     
     numerical_cols = df.select_dtypes(include=['number']).columns.tolist()
-    categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    categorical_cols = df.select_dtypes(include=['object', 'string', 'category', 'bool']).columns.tolist()
     datetime_cols = df.select_dtypes(include=['datetime']).columns.tolist()
     
     # Descriptive statistics

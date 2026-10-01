@@ -24,18 +24,21 @@ def run_evaluation(cases: list[EvaluationCase] | None = None, *, tolerance: floa
             actual_plan = planner(case)
             actual = validate_analysis_plan(actual_plan, dataset)
             expected = validate_analysis_plan(case.expected_plan, dataset)
-            _record(checks["plan_validity"], True)
-            _record(checks["operation"], actual["operation"] == expected["operation"])
-            _record(checks["columns"], _same_columns(actual, expected))
-            _record(checks["filters"], actual.get("filter") == expected.get("filter"))
+            case_checks = {"plan_validity": True, "operation": actual["operation"] == expected["operation"],
+                           "columns": _same_columns(actual, expected), "filters": actual.get("filter") == expected.get("filter")}
+            _record(checks["plan_validity"], case_checks["plan_validity"])
+            _record(checks["operation"], case_checks["operation"])
+            _record(checks["columns"], case_checks["columns"])
+            _record(checks["filters"], case_checks["filters"])
             actual_result, _ = execute_analysis_plan(dataset, actual)
             expected_result = _reference_execute(dataset, expected)
-            _record(checks["numerical"], dataframe_matches(actual_result, expected_result, tolerance))
+            case_checks["numerical"] = dataframe_matches(actual_result, expected_result, tolerance)
+            _record(checks["numerical"], case_checks["numerical"])
             needs_ranking = expected["operation"] in {"top_n", "bottom_n", "ranking"}
-            if needs_ranking:
-                _record(checks["ranking"], _ranking_matches(actual_result, expected_result))
-            else:
-                _record(checks["ranking"], True)
+            case_checks["ranking"] = _ranking_matches(actual_result, expected_result) if needs_ranking else True
+            _record(checks["ranking"], case_checks["ranking"])
+            if not all(case_checks.values()):
+                failures.append({"question": case.question, "failed_checks": [key for key, value in case_checks.items() if not value]})
         except Exception as exc:
             for value in checks.values(): _record(value, False)
             failures.append({"question": case.question, "error": str(exc)})
@@ -88,7 +91,7 @@ def _reference_execute(df, plan):
         work = filtered.assign(period=filtered[plan["date_column"]].dt.to_period("M").astype(str))
         result = work.groupby("period")[metric].agg(agg).reset_index().sort_values("period").reset_index(drop=True)
         if op == "growth_rate":
-            result["previous_value"] = result[metric].shift(1); result["growth_pct"] = result[metric].pct_change() * 100; result["growth_status"] = ["no prior period"] + ["ok"] * (len(result) - 1)
+            result["previous_value"] = result[metric].shift(1); result["growth_pct"] = result[metric].pct_change() * 100; result["growth_status"] = ["unavailable_zero_or_missing_previous"] + ["ok"] * (len(result) - 1)
         return result
     if op == "period_comparison":
         values = filtered.assign(period=filtered[plan["date_column"]].dt.to_period("M").astype(str)).groupby("period")[metric].agg(agg)
