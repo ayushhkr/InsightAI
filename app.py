@@ -16,19 +16,20 @@ st.set_page_config(page_title="InsightAI - Data Analyst", page_icon="📊", layo
 def apply_dashboard_styles():
     st.markdown("""
     <style>
-    .block-container { max-width: 1280px; padding-top: 2.25rem; padding-bottom: 3rem; }
+    .block-container { max-width: 1280px; padding-top: 1.5rem; padding-bottom: 3rem; }
     .stApp h1 { font-size: clamp(2rem, 3vw, 2.5rem); letter-spacing: -0.04em; margin-bottom: 0.1rem; }
-    .insightai-eyebrow { color: #0f766e; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.12em; margin: 0 0 0.35rem; }
-    .insightai-subtitle { color: var(--secondary-text-color); font-size: 1.05rem; margin: 0 0 2rem; max-width: 46rem; }
+    .insightai-eyebrow { color: #5eead4; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.12em; margin: 0 0 0.35rem; }
+    .insightai-subtitle { color: var(--secondary-text-color); font-size: 1.05rem; margin: 0 0 1.25rem; max-width: 46rem; }
     .section-heading { font-size: 1.4rem; font-weight: 700; margin: 0; }
-    .section-copy { color: var(--secondary-text-color); margin: 0.25rem 0 1.15rem; }
-    [data-testid="stMetric"] { border: 1px solid rgba(128, 128, 128, 0.22); border-radius: 0.8rem; padding: 0.85rem 1rem; background: rgba(15, 118, 110, 0.05); }
+    .section-copy { color: var(--secondary-text-color); margin: 0.25rem 0 0.85rem; }
+    .section-divider { margin: 1.65rem 0 1.25rem; border-top: 1px solid rgba(128, 128, 128, 0.18); }
+    [data-testid="stMetric"] { border: 1px solid rgba(128, 128, 128, 0.22); border-radius: 0.8rem; padding: 0.85rem 1rem; background: rgba(15, 118, 110, 0.08); }
     [data-testid="stMetricLabel"] { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
     [data-testid="stDataFrame"], [data-testid="stPlotlyChart"] { border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; overflow: hidden; }
     [data-testid="stChatMessage"] { border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 0.85rem; padding: 0.6rem 0.8rem; }
     [data-testid="stExpander"] { border-radius: 0.75rem; }
-    .stButton > button, .stDownloadButton > button { border-radius: 0.55rem; font-weight: 650; min-height: 2.55rem; }
-    .stDownloadButton > button { border-color: #0f766e; color: #0f766e; }
+    .stButton > button, .stDownloadButton > button { border-radius: 0.55rem; font-weight: 650; min-height: 2.55rem; width: 100%; }
+    .stDownloadButton > button { border-color: #2dd4bf; color: #ccfbf1; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -37,6 +38,9 @@ def section_heading(title: str, description: str):
         f'<p class="section-heading">{title}</p><p class="section-copy">{description}</p>',
         unsafe_allow_html=True,
     )
+
+def section_divider():
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
 def initialize_chat_history():
     if "chat_history" not in st.session_state:
@@ -72,7 +76,7 @@ def main():
                 
             # Dashboard KPI Cards
             st.divider()
-            section_heading("Dataset Overview", "A compact read on shape, completeness, and data quality.")
+            section_heading("Dataset Details", "A compact read on shape, completeness, and data quality.")
             kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
             
             kpi_col1.metric("Rows", f"{profile['num_rows']:,}")
@@ -89,13 +93,13 @@ def main():
                             delta="Clean" if dup_count == 0 else "Review Needed",
                             delta_color="normal" if dup_count == 0 else "inverse")
 
-            ask_section = st.container()
-            results_section = st.container()
+            details_section = st.container()
             explore_section = st.container()
             anomaly_section = st.container()
-            details_section = st.container()
+            ask_section = st.container()
+            results_section = st.container()
 
-            with details_section.expander("Dataset Details", expanded=False):
+            with details_section.expander("Preview, column details, and statistics", expanded=True):
                 # --- Section 1: Dataset Preview ---
                 st.subheader("Dataset Preview")
                 st.dataframe(df.head(10), use_container_width=True)
@@ -165,11 +169,18 @@ def main():
 
             # --- Anomaly Detection ---
             with anomaly_section:
-                section_heading("Anomaly Detection", "Scan numerical features for unusual patterns with Isolation Forest.")
+                section_heading("Anomaly Detection", "Scan numerical features for unusual patterns with the existing detection methods.")
             
+            anomaly_method = anomaly_section.selectbox(
+                "Detection method",
+                ["Isolation Forest", "IQR", "Z-score"],
+                help="Runs the existing anomaly detection engine with the selected method.",
+            )
+            method_key = {"Isolation Forest": "isolation_forest", "IQR": "iqr", "Z-score": "z_score"}[anomaly_method]
+
             if anomaly_section.button("Detect Anomalies", type="primary"):
                 with anomaly_section.spinner("Scanning dataset for anomalies..."):
-                    st.session_state["anomaly_results"] = detect_anomalies(df)
+                    st.session_state["anomaly_results"] = detect_anomalies(df, method=method_key)
                     st.session_state["anomaly_explanation"] = None
                     
             if "anomaly_results" in st.session_state:
@@ -265,10 +276,6 @@ def main():
                             st.markdown("##### 🔍 How I Analyzed This:")
                             st.json(turn['plan'])
 
-            with results_section.container(border=True):
-                st.caption("Export the complete workspace, including the dataset profile, analyses, and anomaly findings.")
-                report_slot = st.empty()
-
             if user_question:
                 # Show instantly
                 with results_section.chat_message("user"):
@@ -336,6 +343,8 @@ def main():
                             st.error("An unexpected error occurred during AI analysis. Please try again.")
                             st.stop()
 
+            st.divider()
+            section_heading("Downloadable Report", "Export the dataset profile, analyses, anomaly findings, and AI explanations in one file.")
             report_html = build_report(
                 profile=profile,
                 dataset=df,
@@ -343,8 +352,8 @@ def main():
                 anomaly_result=st.session_state.get("anomaly_results"),
                 anomaly_explanation=st.session_state.get("anomaly_explanation"),
             )
-            report_slot.download_button(
-                "Download Full Report",
+            st.download_button(
+                "Download Report",
                 data=report_html,
                 file_name="insightai_full_report.html",
                 mime="text/html",
