@@ -1,9 +1,10 @@
 import pandas as pd
 import pytest
+from types import SimpleNamespace
 
 from src.analyzer import execute_analysis_plan
 from src.filters import FilterValidationError, apply_filter
-from src.llm import LLMServiceError, LLMTransientError, call_groq_with_retry
+from src.llm import LLMServiceError, LLMTransientError, call_groq_with_retry, generate_analysis_plan
 from src.llm_cache import LLMResponseCache
 from src.plan_validation import PlanValidationError, validate_analysis_plan
 from src.result_validation import ResultValidationError, validate_result
@@ -69,3 +70,28 @@ def test_llm_errors_are_generic_and_transient():
                 @staticmethod
                 def create(**kwargs): raise Busy()
     with pytest.raises(LLMTransientError): call_groq_with_retry(BusyClient(), "model", "x", 0, max_retries=0)
+
+
+def test_plan_prompt_renders_literal_filter_schema(monkeypatch):
+    captured = {}
+
+    def fake_call(**kwargs):
+        captured["prompt"] = kwargs["contents"]
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content='{"operation":"groupby","group_column":"region","metric":"revenue","aggregation":"sum","filter":null,"sort":"descending","top_n":1,"date_column":null,"date_range":null,"correlation_columns":null,"chart":"bar","title":"Revenue by region"}'
+        ))])
+
+    monkeypatch.setattr("src.llm.get_client", lambda: object())
+    monkeypatch.setattr("src.llm.call_groq_with_retry", fake_call)
+    metadata = {
+        "columns": ["region", "revenue"],
+        "data_types": {"region": "object", "revenue": "float64"},
+        "numerical_cols": ["revenue"],
+        "categorical_cols": ["region"],
+        "datetime_cols": [],
+    }
+
+    plan = generate_analysis_plan("which region has most revenues", metadata)
+
+    assert plan["group_column"] == "region"
+    assert '"filter": {"conditions": [{' in captured["prompt"]

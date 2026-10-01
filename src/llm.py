@@ -170,11 +170,11 @@ def generate_analysis_plan(question: str, dataframe_metadata: dict, history: lis
       "group_column": "<column name or null>",
       "metric": "<column name or null>",
       "aggregation": "sum" | "mean" | "count" | "min" | "max" | null,
-      "filter": {"conditions": [{"column": "<column>", "operator": "==|!=|>|<|>=|<=|contains|startswith|endswith|in|not_in|is_null|is_not_null|between", "value": "<value>"}], "logic": "AND|OR"} | null,
+      "filter": {{"conditions": [{{"column": "<column>", "operator": "==|!=|>|<|>=|<=|contains|startswith|endswith|in|not_in|is_null|is_not_null|between", "value": "<value>"}}], "logic": "AND|OR"}} | null,
       "sort": "ascending" | "descending" | null,
       "top_n": <integer or null>,
       "date_column": "<column name or null>",
-      "date_range": {"start": "ISO date", "end": "ISO date"} | null,
+      "date_range": {{"start": "ISO date", "end": "ISO date"}} | null,
       "correlation_columns": ["<numeric column>"] | null,
       "chart": "bar" | "line" | "scatter" | "histogram" | "none",
       "title": "<A short title for the chart/analysis>"
