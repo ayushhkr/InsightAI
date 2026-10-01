@@ -4,6 +4,7 @@ Responsible for analyzing and profiling uploaded datasets (e.g., getting missing
 """
 import hashlib
 import pandas as pd
+from src.dataset_fingerprint import dataframe_fingerprint
 
 def profile_dataset(df: pd.DataFrame) -> dict:
     """
@@ -15,7 +16,7 @@ def profile_dataset(df: pd.DataFrame) -> dict:
         if df[col].dtype == 'object':
             try:
                 # We attempt a light conversion; if it fails, we keep as object
-                df[col] = pd.to_datetime(df[col], infer_datetime_format=True)
+                df[col] = pd.to_datetime(df[col])
             except (ValueError, TypeError):
                 pass
                 
@@ -36,7 +37,7 @@ def profile_dataset(df: pd.DataFrame) -> dict:
         desc_stats = {}
         
     return {
-        "dataset_fingerprint": hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values.tobytes()).hexdigest(),
+        "dataset_fingerprint": dataframe_fingerprint(df),
         "num_rows": num_rows,
         "num_cols": num_cols,
         "columns": columns,
