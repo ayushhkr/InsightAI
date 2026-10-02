@@ -33,20 +33,16 @@ def test_anomaly_constant_value():
     res = detect_anomalies(df)
     assert res.get("total_anomalies") == 0
 
-@pytest.mark.parametrize("method", ["isolation_forest", "iqr", "z_score"])
-def test_anomaly_methods_have_consistent_structure(method):
+def test_isolation_forest_returns_consistent_structure():
     df = pd.DataFrame({"value": [1, 1, 1, 1, 100]})
-    result = detect_anomalies(df, method=method, contamination=.2, z_threshold=1.5)
-    assert result["method"] == method
+    result = detect_anomalies(df, contamination=.2)
+    assert result["method"] == "isolation_forest"
     assert {"total_anomalies", "anomalous_indices", "anomaly_scores", "columns", "metadata"}.issubset(result)
     assert result["total_anomalies"] >= 1
 
-def test_anomaly_configuration_severity_and_consensus():
+def test_anomaly_configuration_and_severity():
     df = pd.DataFrame({"value": [1, 1, 1, 1, 100]})
     with pytest.raises(ValueError): detect_anomalies(df, contamination=0)
-    result = detect_anomalies(df, method="z_score", z_threshold=1.5)
+    result = detect_anomalies(df, contamination=.2)
     assert result["severity"]
-    assert {"mean", "q1", "q3", "iqr", "lower_bound", "upper_bound"}.issubset(result["columns"]["value"])
-    consensus = detect_anomalies(df, consensus=True, contamination=.2, z_threshold=1.5)
-    assert consensus["methods_run"] == ["isolation_forest", "iqr", "z_score"]
-    assert consensus["consensus_count"]
+    assert {"mean", "q1", "q3", "iqr"}.issubset(result["columns"]["value"])

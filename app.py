@@ -169,18 +169,11 @@ def main():
 
             # --- Anomaly Detection ---
             with anomaly_section:
-                section_heading("Anomaly Detection", "Scan numerical features for unusual patterns with the existing detection methods.")
-            
-            anomaly_method = anomaly_section.selectbox(
-                "Detection method",
-                ["Isolation Forest", "IQR", "Z-score"],
-                help="Runs the existing anomaly detection engine with the selected method.",
-            )
-            method_key = {"Isolation Forest": "isolation_forest", "IQR": "iqr", "Z-score": "z_score"}[anomaly_method]
+                section_heading("Anomaly Detection", "Scan numerical features for unusual patterns with Isolation Forest.")
 
             if anomaly_section.button("Detect Anomalies", type="primary"):
                 with anomaly_section.spinner("Scanning dataset for anomalies..."):
-                    st.session_state["anomaly_results"] = detect_anomalies(df, method=method_key)
+                    st.session_state["anomaly_results"] = detect_anomalies(df)
                     st.session_state["anomaly_explanation"] = None
                     
             if "anomaly_results" in st.session_state:
